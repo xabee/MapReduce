@@ -1,0 +1,101 @@
+package bdma.labos.hadoop.mapreduce;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.*;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
+import com.google.common.collect.Lists;
+
+public class JoinMapReduce extends JobMapReduce {
+	
+	public static class JoinMapper extends Mapper<Text, Text, Text, Text> {
+
+		    public void map(Text key, Text value, Mapper<Text, Text, Text, Text> context) throws IOException, InterruptedException {
+		        String[] values = value.toString().split(",");
+		        String selectionValue = Utils.getAttribute((String[])values, (String)"type");
+		        String keyValue = Utils.getAttribute((String[])values, (String)"region");
+		        if (selectionValue.equals("type_1") || selectionValue.equals("type_2")) {
+		            context.write(key, value, "", "");
+		        }
+		    }
+		    
+	}
+	
+	
+	public static class JoinReducer extends Reducer<Text, Text, Text, Text> {
+		    public void reduce(Text key, Iterable<Text> values, Reducer<Text, Text, NullWritable, Text> context) throws IOException, InterruptedException {
+		        ArrayList<String> type_1_values = new ArrayList<String>();
+		        ArrayList<String> type_2_values = new ArrayList<String>();
+		        for (Text value : values) {
+		            String[] arrayValues = value.toString().split(",");
+		            String elem = Utils.getAttribute((String[])arrayValues, (String)"type");
+		            if (elem.equals("type_1")) {
+		                type_1_values.add(value.toString());
+		                continue;
+		            }
+		            type_2_values.add(value.toString());
+		        }
+		        int i = 0;
+		        while (i < type_1_values.size()) {
+		            int j = 0;
+		            while (j < type_2_values.size()) {
+		                context.write((Object)NullWritable.get(), (Object)new Text(String.valueOf((String)type_1_values.get(i)) + "<->" + (String)type_2_values.get(j)));
+		                ++j;
+		            }
+		            ++i;
+		        }
+		    }
+		}
+	
+	public JoinMapReduce() {
+		this.input = null;
+		this.output = null;
+	}
+	
+	public boolean run() throws IOException, ClassNotFoundException, InterruptedException {
+		Configuration configuration = new Configuration();
+		
+		// Define the new job and the name it will be given
+		Job job = Job.getInstance(configuration, "Join");
+		job.setJarByClass(JoinMapReduce.class);
+		
+		// Set the mapper class it must use
+		job.setMapperClass(JoinMapper.class);
+		job.setMapOutputKeyClass(Text.class);
+		job.setMapOutputValueClass(Text.class);
+		
+		// Set the reducer class it must use
+		job.setReducerClass(JoinReducer.class);
+		
+		// The output will be Text
+	    job.setOutputKeyClass(NullWritable.class);
+	    job.setOutputValueClass(Text.class);
+	    
+	    // The files the job will read from/write to
+	    job.setInputFormatClass(SequenceFileInputFormat.class);
+	    FileInputFormat.addInputPath(job, new Path(this.input));
+	    FileOutputFormat.setOutputPath(job, new Path(this.output));
+	    
+	    // These are the parameters that we are sending to the job
+	    // CODE HERE
+	    
+	    // Let's run it!
+	    return job.waitForCompletion(true);
+	}
+	
+}
